@@ -52,6 +52,15 @@ SPOKE_DEBUG=1 .build/release/Spoke --test audio.wav  # + hipótesis parciales y 
 .build/release/Spoke --hud-snapshot hud.png        # render del HUD para revisar el diseño
 ```
 
+## Transcribir archivos
+
+Para audios o videos grabados (reuniones, notas de voz), con el mismo modelo:
+
+```bash
+tools/transcribir.sh reunion.m4a        # → reunion.txt, reunion.srt, reunion.vtt
+tools/transcribir.sh interview.mp4 en   # otro idioma
+```
+
 ## Ícono
 
 `python3 tools/make_icon.py preview` compara diseños; `python3 tools/make_icon.py onda`
