@@ -1,5 +1,10 @@
 # Spoke
 
+> **Estado:** la versión de macOS (Swift) es la principal y está probada. La de
+> Windows (`windows/`) es un port en Python cuya lógica se probó en macOS, pero
+> las piezas propias de Windows (tecleo, atajo, HUD, bandeja, micrófono) aún no
+> se han validado en un equipo real: se agradecen reportes.
+
 Dictado por voz 100 % local para macOS, con Whisper (whisper.cpp + Metal).
 Apretás **⌥ Space**, hablás, y el texto se va escribiendo **mientras hablás**
 en la app que tenga el foco. Apretás ⌥ Space de nuevo para terminar.
@@ -86,3 +91,16 @@ genera `Resources/AppIcon.icns` y el ícono de la barra de menú.
 
 Todo en `Sources/Spoke/Config.swift`: atajo, idioma, ruta del modelo,
 duración de la pausa que corta un fragmento, etc.
+
+## Licencia y créditos
+
+[MIT](LICENSE). Usa [whisper.cpp](https://github.com/ggml-org/whisper.cpp) y el
+modelo [Whisper](https://github.com/openai/whisper) de OpenAI (ambos MIT). El
+modelo no se distribuye con este repositorio: se descarga con
+`tools/instalar-modelo.*`.
+
+## Privacidad
+
+Todo el procesamiento es local: el audio no sale de tu equipo. Spoke escribe el
+texto en la ventana que tenga el foco (incluidos campos de contraseña), así que
+verifica dónde está el foco antes de dictar.
