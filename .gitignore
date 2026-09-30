@@ -1,4 +1,6 @@
-.build/
-build/
-.DS_Store
 __pycache__/
+.build/
+.DS_Store
+.pytest_cache/
+.venv/
+build/

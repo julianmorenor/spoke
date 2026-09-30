@@ -32,7 +32,17 @@ tools/instalar-modelo.sh   # descarga y verifica ggml-large-v3-turbo.bin (~1,6 G
 > Guía completa (justificación del modelo, macOS y Windows):
 > **[docs/INSTALACION.md](docs/INSTALACION.md)**
 
-## Compilar e instalar
+## Windows
+
+Port en Python (mismo modelo, misma lógica de dictado) en [`windows/`](windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\install.ps1 -Autostart
+```
+
+Detalles, rendimiento y lista de validación en [docs/INSTALACION.md](docs/INSTALACION.md#3-windows).
+
+## Compilar e instalar (macOS)
 
 ```bash
 ./build.sh --run     # compila, firma, instala en ~/Applications y abre

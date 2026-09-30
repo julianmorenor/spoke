@@ -59,89 +59,115 @@ tools/instalar-modelo.sh        # descarga y verifica el modelo en ~/.local/shar
 
 ## 3. Windows
 
-> **Estado:** la app de dictado (`Sources/Spoke`) está escrita en Swift contra
-> APIs de macOS (AppKit, Carbon, AVFoundation), así que **no compila en
-> Windows**. Lo que sí se puede usar en Windows hoy es el **mismo modelo y
-> motor** (transcripción de archivos). Portar el dictado en vivo
-> (atajo global + captura de micrófono + tecleo) es trabajo aparte; ver §3.4.
-> Las especificaciones del equipo se definirán al estar en él.
+La versión de Windows está en [`windows/`](../windows): es un port en **Python**
+de la app de macOS. Usa **el mismo modelo** (`ggml-large-v3-turbo.bin`, vía
+`pywhispercpp`, que envuelve whisper.cpp) y **la misma lógica** de dictado en
+vivo (segmentador por energía + LocalAgreement-2). Cambian sólo las piezas del SO:
 
-### 3.1 Requisitos previos
+| Pieza en macOS (Swift) | Windows (Python) |
+|---|---|
+| `AudioCapture` (AVFoundation) | `sounddevice` (WASAPI) + `segmenter.py` |
+| Atajo global (Carbon) | `RegisterHotKey` (`hotkey.py`) |
+| `TextInserter` (CGEvent) | `SendInput` con `KEYEVENTF_UNICODE` (`inserter.py`) |
+| HUD (AppKit/SwiftUI) | Ventana `tkinter` sin foco, `WS_EX_NOACTIVATE` (`hud.py`) |
+| Ícono de barra de menú | Ícono de bandeja con `pystray` (`tray.py`) |
 
-Con `winget` (PowerShell):
+> **Estado de la validación.** La lógica portable (segmentador, sesión y
+> transcripción con el modelo real) se probó end-to-end en macOS con
+> `python -m spoke --test` y hay pruebas automáticas (`windows/tests`). Las
+> piezas exclusivas de Windows (SendInput, RegisterHotKey, HUD, bandeja,
+> WASAPI, instalador) **no se han ejecutado todavía en Windows**: la primera
+> vez que se instale en el otro equipo hay que validarlas (ver §3.4).
+
+### 3.1 Instalación (un comando)
+
+En PowerShell, dentro del repo clonado (requiere Git y `winget`, incluido en
+Windows 10/11 actuales):
 
 ```powershell
 winget install Git.Git
-winget install Gyan.FFmpeg
-```
-
-Reiniciá la terminal para que `git` y `ffmpeg` queden en el `PATH`.
-
-### 3.2 Descargar el modelo
-
-```powershell
 git clone <URL-de-este-repo> spoke
 cd spoke
-powershell -ExecutionPolicy Bypass -File tools\instalar-modelo.ps1
+powershell -ExecutionPolicy Bypass -File windows\install.ps1 -Autostart
 ```
 
-Queda en `%USERPROFILE%\.local\share\whisper\ggml-large-v3-turbo.bin` y se
-verifica con SHA-256.
+El script: busca Python 3.10-3.13 (lo instala con winget si falta), crea
+`windows\.venv`, instala las dependencias, instala `ffmpeg` (sólo para
+transcribir archivos), descarga y verifica el modelo en
+`%USERPROFILE%\.local\share\whisper\`, crea el acceso "Spoke" en el Menú
+Inicio (y con `-Autostart`, en el inicio de sesión) y corre `--check`.
+Si `-SkipModel`, no descarga el modelo.
 
-### 3.3 Obtener `whisper-cli.exe`
+Uso: abrí **Spoke** desde el Menú Inicio (o `windows\spoke.bat`). Aparece un
+ícono en la bandeja. Apretá **Alt + Espacio**, hablá, y el texto se escribe en
+la app con foco; apretá de nuevo para terminar. Si hay problemas:
+`windows\spoke-debug.bat` (consola con mensajes) y el log en
+`%LOCALAPPDATA%\Spoke\spoke.log`.
 
-Elegí **una** opción según el hardware:
+### 3.2 Configuración
 
-**a) Binarios oficiales (lo más simple).** En
-<https://github.com/ggml-org/whisper.cpp/releases> descargá el zip de Windows:
+Variables de entorno (opcionales; o editar `windows/spoke/config.py`):
 
-- `whisper-bin-x64.zip` → solo CPU.
-- `whisper-cublas-*-bin-x64.zip` → GPU NVIDIA (CUDA). Es la mejor opción si hay
-  tarjeta NVIDIA.
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `SPOKE_MODEL` | `~\.local\share\whisper\ggml-large-v3-turbo.bin` | Ruta del modelo |
+| `SPOKE_LANGUAGE` | `es` | Idioma |
+| `SPOKE_HOTKEY` | `alt+space` | Atajo (`ctrl+alt+d`, `win+shift+s`…) |
+| `SPOKE_GPU` | `1` | `0` fuerza CPU |
+| `SPOKE_THREADS` | núcleos − 2 (máx. 8) | Hilos de Whisper |
+| `SPOKE_DEBUG` | — | Muestra hipótesis parciales y tiempos |
 
-Descomprimilo (p. ej. en `C:\whisper`) y agregá esa carpeta al `PATH`. Los
-nombres de los zips cambian entre versiones: si no aparecen, usá la opción b.
+`Alt + Espacio` es también el menú de sistema de las ventanas; si Windows lo
+rechaza, la app avisa en la bandeja: usá otro, p. ej. `ctrl+alt+space`.
 
-**b) Compilar desde el código fuente** (permite elegir backend):
+### 3.3 Rendimiento: GPU o CPU
+
+- La rueda de `pywhispercpp` para Windows que instala pip es **sólo CPU**. Con
+  `large-v3-turbo` en CPU las pasadas parciales pueden tardar más de 0,5 s y el
+  texto en vivo se atrasa (sigue siendo correcto; la pasada final completa
+  todo). Mejora usando un modelo más chico: bajá `ggml-small.bin` de
+  <https://huggingface.co/ggerganov/whisper.cpp> y define
+  `SPOKE_MODEL` apuntando a él.
+- Para **GPU NVIDIA**, compilar `pywhispercpp` con CUDA (necesita Visual Studio
+  Build Tools con C++, CMake y CUDA Toolkit):
+  ```powershell
+  $env:GGML_CUDA = "1"
+  windows\.venv\Scripts\pip install --no-binary pywhispercpp --force-reinstall pywhispercpp
+  ```
+  (Vulkan para AMD/Intel: `GGML_VULKAN=1` con el Vulkan SDK.) Las variables
+  exactas pueden variar según la versión de pywhispercpp; revisar su README.
+- Si `pip` no encuentra rueda para tu versión de Python y intenta compilar,
+  instalá las Build Tools de C++ (`winget install Microsoft.VisualStudio.2022.BuildTools`)
+  o usá Python 3.12.
+
+### 3.4 Lista de validación en el equipo Windows
+
+1. `windows\.venv\Scripts\python -m spoke --check` → todo `OK`.
+2. `python -m spoke --devices` → aparece tu micrófono.
+3. `python -m spoke --test audio.wav` → escribe texto por consola (prueba el motor).
+4. Abrir Spoke → ícono en bandeja con "Listo · Alt + Space".
+5. Abrir el Bloc de notas, **Alt + Espacio**, hablar → el HUD aparece abajo sin
+   robar el foco y el texto se escribe. Probar también acentos y `ñ`.
+6. Probar en una app "elevada" (ejecutada como administrador): Windows
+   bloquea `SendInput` hacia ellas salvo que Spoke también corra elevado.
+
+### 3.5 Transcribir archivos
 
 ```powershell
-winget install Kitware.CMake
-winget install Microsoft.VisualStudio.2022.BuildTools   # con "Desarrollo para el escritorio con C++"
-git clone https://github.com/ggml-org/whisper.cpp
-cd whisper.cpp
-cmake -B build                       # CPU
-# cmake -B build -DGGML_CUDA=1       # NVIDIA (requiere CUDA Toolkit)
-# cmake -B build -DGGML_VULKAN=1     # AMD / Intel (requiere Vulkan SDK)
-cmake --build build -j --config Release
-# el ejecutable queda en build\bin\Release\whisper-cli.exe
+windows\transcribir.bat reunion.mp4        # -> reunion.txt y reunion.srt
+windows\transcribir.bat entrevista.m4a en
 ```
 
-### 3.4 Probar la transcripción
+(Alternativa sin Python: `whisper-cli.exe` de los binarios oficiales de
+whisper.cpp con `-m <modelo> -f <wav 16 kHz> -l es --output-txt --output-srt`.)
 
-```powershell
-$m = "$env:USERPROFILE\.local\share\whisper\ggml-large-v3-turbo.bin"
-ffmpeg -y -i reunion.m4a -ar 16000 -ac 1 -c:a pcm_s16le reunion.wav
-whisper-cli -m $m -f reunion.wav -l es -pp --output-txt --output-srt --output-vtt --output-file reunion
-```
+### 3.6 Limitaciones conocidas
 
-Es lo mismo que hace `tools/transcribir.sh` en Mac. (`tools/transcribir.sh`
-también corre en Windows dentro de **Git Bash** o **WSL**, pero usa la ruta del
-modelo de Unix; en Git Bash funciona porque `$HOME` apunta al perfil.)
-
-### 3.5 Dictado en vivo en Windows (pendiente)
-
-Para tener lo mismo que la app de Mac habría que portar cuatro piezas; el
-modelo y la lógica de `DictationSession` (LocalAgreement-2) se reutilizan:
-
-| Pieza en Mac | Equivalente en Windows |
-|---|---|
-| `AudioCapture` (AVFoundation) | WASAPI / `sounddevice` / NAudio |
-| Atajo global (Carbon) | `RegisterHotKey` (Win32) |
-| `TextInserter` (CGEvent) | `SendInput` con `KEYEVENTF_UNICODE` |
-| HUD (AppKit) | Ventana WPF/WinUI sin foco (`WS_EX_NOACTIVATE`) |
-
-Decidir el stack (Python + `whisper.cpp`/`pywhispercpp`, C#, Rust…) cuando
-estemos en ese equipo, según sus especificaciones.
+- No se puede teclear en ventanas con privilegios más altos que Spoke (UAC).
+- En apps que interceptan `SendInput` Unicode (algunos juegos/escritorios
+  remotos) el tecleo puede no llegar.
+- Sin ícono `.ico` propio: el de bandeja se genera en código con los mismos
+  colores del de macOS.
 
 ---
 
