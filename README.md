@@ -25,11 +25,12 @@ micrófono → 16 kHz mono → enunciados (voz entre pausas)
 ## Requisitos
 
 ```bash
-brew install whisper-cpp
-mkdir -p ~/.local/share/whisper
-curl -L -o ~/.local/share/whisper/ggml-large-v3-turbo.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
+brew install whisper-cpp ffmpeg
+tools/instalar-modelo.sh   # descarga y verifica ggml-large-v3-turbo.bin (~1,6 GB)
 ```
+
+> Guía completa (justificación del modelo, macOS y Windows):
+> **[docs/INSTALACION.md](docs/INSTALACION.md)**
 
 ## Compilar e instalar
 
